@@ -57,7 +57,7 @@ def _record_event(db: Session, signer_id, event_type: str, request: Request = No
         event_type=event_type,
         ip_address=ip or (request.client.host if request else None),
         user_agent=ua or (request.headers.get("user-agent") if request else None),
-        metadata=extra_meta,
+        event_metadata=extra_meta,
     ))
 
 
@@ -258,7 +258,7 @@ def get_audit_trail(contract_id: str, db: Session = Depends(get_db), current_use
                 "event_type": event.event_type,
                 "ip_address": event.ip_address,
                 "user_agent": event.user_agent,
-                "metadata": event.metadata,
+                "metadata": event.event_metadata,
                 "timestamp": event.created_at.isoformat(),
             })
 

@@ -30,3 +30,12 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserOut
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str          # raw token from the email link
+    new_password: str

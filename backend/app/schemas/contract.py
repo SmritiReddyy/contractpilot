@@ -39,7 +39,7 @@ class SignatureEventOut(BaseModel):
     event_type: str
     ip_address: Optional[str]
     user_agent: Optional[str]
-    metadata: Optional[Dict]
+    event_metadata: Optional[Dict]
     created_at: datetime
 
     class Config:

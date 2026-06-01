@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import AppLayout from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
+import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import Dashboard from '@/pages/Dashboard'
 import Contracts from '@/pages/Contracts'
 import ContractDetail from '@/pages/ContractDetail'
@@ -31,6 +33,9 @@ export default function App() {
 
           <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
           <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
+          <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
+          {/* Reset password is intentionally NOT behind GuestRoute — a logged-in user may need it */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Public signing page — no auth */}
           <Route path="/sign/:token" element={<SignPage />} />
