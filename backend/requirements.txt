@@ -2,7 +2,7 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.2
 python-dotenv==1.0.1
 supabase==2.5.0
-pydantic>=2.9.0,<3.0.0
+pydantic[email]>=2.9.0,<3.0.0
 pydantic-settings>=2.3.0,<3.0.0
 sqlalchemy==2.0.41
 alembic==1.15.2
