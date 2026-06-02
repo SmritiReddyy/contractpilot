@@ -95,6 +95,7 @@ class ContractSummary(BaseModel):
     id: uuid.UUID
     title: str
     status: ContractStatus
+    is_sample: bool = False
     owner_id: uuid.UUID
     start_date: Optional[date]
     end_date: Optional[date]

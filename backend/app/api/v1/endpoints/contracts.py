@@ -87,15 +87,17 @@ def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(
     today = date.today()
     soon = today + timedelta(days=30)
 
-    total    = db.query(Contract).filter(Contract.owner_id == current_user.id).count()
-    active   = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.sent).count()
-    signed   = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.signed).count()
-    expired  = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.expired).count()
-    draft    = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.draft).count()
+    base = (Contract.owner_id == current_user.id) & (Contract.is_sample == False)
+
+    total    = db.query(Contract).filter(base).count()
+    active   = db.query(Contract).filter(base, Contract.status == ContractStatus.sent).count()
+    signed   = db.query(Contract).filter(base, Contract.status == ContractStatus.signed).count()
+    expired  = db.query(Contract).filter(base, Contract.status == ContractStatus.expired).count()
+    draft    = db.query(Contract).filter(base, Contract.status == ContractStatus.draft).count()
     expiring = (
         db.query(Contract)
         .filter(
-            Contract.owner_id == current_user.id,
+            base,
             Contract.end_date <= soon,
             Contract.end_date >= today,
             Contract.status.notin_([ContractStatus.expired, ContractStatus.signed]),
@@ -103,12 +105,12 @@ def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(
     )
     recent = (
         db.query(Contract)
-        .filter(Contract.owner_id == current_user.id)
+        .filter(base)
         .order_by(Contract.updated_at.desc())
         .limit(5).all()
     )
 
-    owner_contract_ids = [c.id for c in db.query(Contract.id).filter(Contract.owner_id == current_user.id).all()]
+    owner_contract_ids = [c.id for c in db.query(Contract.id).filter(base).all()]
 
     pending_signers = 0
     if owner_contract_ids:
@@ -223,6 +225,28 @@ def delete_contract(contract_id: str, db: Session = Depends(get_db), current_use
         raise HTTPException(status_code=404, detail="Contract not found")
     db.delete(contract)
     db.commit()
+
+
+@router.post("/{contract_id}/duplicate", response_model=ContractOut, status_code=status.HTTP_201_CREATED)
+def duplicate_contract(contract_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    original = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    copy = Contract(
+        title=f"Copy of {original.title}",
+        content=original.content,
+        owner_id=current_user.id,
+        template_id=original.template_id,
+        start_date=original.start_date,
+        end_date=original.end_date,
+        reminder_date=original.reminder_date,
+    )
+    db.add(copy)
+    db.flush()
+    _save_version(db, copy)
+    db.commit()
+    db.refresh(copy)
+    return copy
 
 
 @router.post("/{contract_id}/versions/{version_id}/restore", response_model=ContractOut)

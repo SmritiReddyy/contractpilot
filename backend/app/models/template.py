@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -15,6 +15,7 @@ class Template(Base):
     content = Column(Text, nullable=False)
     variables = Column(JSONB, default=list)  # [{"name": "client_name", "label": "Client Name", "type": "text"}]
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    is_sample = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

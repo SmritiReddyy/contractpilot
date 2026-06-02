@@ -5,7 +5,7 @@ import { formatDate, statusColor } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Search, FileText, Trash2, Eye } from 'lucide-react'
+import { Plus, Search, FileText, Trash2, Copy } from 'lucide-react'
 
 export default function Contracts() {
   const navigate = useNavigate()
@@ -26,6 +26,13 @@ export default function Contracts() {
     if (!confirm('Delete this contract?')) return
     await contractsApi.delete(id)
     setContracts((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  const handleDuplicate = async (e, id) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const { data } = await contractsApi.duplicate(id)
+    navigate(`/contracts/${data.id}`)
   }
 
   const filtered = contracts.filter((c) => {
@@ -111,11 +118,25 @@ export default function Contracts() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${statusColor(contract.status)}`}>
-                        {contract.status}
-                      </span>
+                      {contract.is_sample ? (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          Sample
+                        </span>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${statusColor(contract.status)}`}>
+                          {contract.status}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => handleDuplicate(e, contract.id)}
+                        title="Duplicate contract"
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={(e) => handleDelete(e, contract.id)}
+                        title="Delete contract"
                         className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />

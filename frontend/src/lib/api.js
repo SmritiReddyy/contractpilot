@@ -43,6 +43,7 @@ export const contractsApi = {
   addSigner: (id, data) => api.post(`/contracts/${id}/signers`, data),
   revokeSigner: (id, signerId) => api.delete(`/contracts/${id}/signers/${signerId}`),
   restoreVersion: (contractId, versionId) => api.post(`/contracts/${contractId}/versions/${versionId}/restore`),
+  duplicate: (id) => api.post(`/contracts/${id}/duplicate`),
   analyze: (id) => api.post(`/contracts/${id}/analyze`),
   summarize: (id) => api.post(`/contracts/${id}/summarize`),
   auditTrail: (id) => api.get(`/contracts/${id}/audit`),

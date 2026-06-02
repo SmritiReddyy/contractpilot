@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from app.core.database import Base
 
@@ -13,4 +13,5 @@ class Clause(Base):
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     category = Column(String, nullable=True)
+    is_sample = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

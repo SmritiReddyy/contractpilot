@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum, Date
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum, Date, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -29,6 +29,7 @@ class Contract(Base):
     # Hash of content when first signer was added — used for tamper detection
     signing_mode = Column(String, default="parallel")
     locked_content_hash = Column(String, nullable=True)
+    is_sample = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

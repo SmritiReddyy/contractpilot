@@ -108,7 +108,7 @@ SAMPLE_CLAUSES = [
 
 SAMPLE_TEMPLATES = [
     {
-        "name": "Sample NDA Template",
+        "title": "Sample NDA Template",
         "description": "Standard mutual non-disclosure agreement between two parties.",
         "content": """MUTUAL NON-DISCLOSURE AGREEMENT
 
@@ -146,7 +146,7 @@ Date:      ___________________      Date:      ___________________
 """,
     },
     {
-        "name": "Sample Service Agreement Template",
+        "title": "Sample Service Agreement Template",
         "description": "General services agreement between a service provider and client.",
         "content": """SERVICE AGREEMENT
 
@@ -186,7 +186,7 @@ Date:      ___________________      Date:      ___________________
 """,
     },
     {
-        "name": "Sample Employment Offer Letter Template",
+        "title": "Sample Employment Offer Letter Template",
         "description": "Offer letter template for new employee onboarding.",
         "content": """EMPLOYMENT OFFER LETTER
 
@@ -351,15 +351,15 @@ def seed_sample_data(db, owner_id):
 
     # Clauses
     for c in SAMPLE_CLAUSES:
-        db.add(Clause(owner_id=owner_id, **c))
+        db.add(Clause(owner_id=owner_id, is_sample=True, **c))
 
     # Templates
     for t in SAMPLE_TEMPLATES:
-        db.add(Template(owner_id=owner_id, **t))
+        db.add(Template(owner_id=owner_id, is_sample=True, **t))
 
     # Contracts + first version
     for c_data in _sample_contracts(owner_id):
-        contract = Contract(owner_id=owner_id, **c_data)
+        contract = Contract(owner_id=owner_id, is_sample=True, **c_data)
         db.add(contract)
         db.flush()
         db.add(ContractVersion(

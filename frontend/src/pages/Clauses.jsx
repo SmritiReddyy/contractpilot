@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { BookOpen, Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, Loader2, Copy } from 'lucide-react'
 
 const CATEGORIES = ['All', 'Confidentiality', 'Indemnity', 'Termination', 'Payment', 'Liability', 'Governing Law', 'Other']
 
@@ -34,6 +34,12 @@ export default function Clauses() {
   const openEdit = (clause) => {
     setEditing(clause)
     setForm({ title: clause.title, content: clause.content, category: clause.category || '' })
+    setDialog(true)
+  }
+
+  const openUse = (clause) => {
+    setEditing(null)
+    setForm({ title: `Copy of ${clause.title}`, content: clause.content, category: clause.category || '' })
     setDialog(true)
   }
 
@@ -127,7 +133,10 @@ export default function Clauses() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(clause)}>
+                    <Button size="sm" variant="outline" onClick={() => openUse(clause)} title="Use this clause as a starting point">
+                      <Copy className="w-3.5 h-3.5 mr-1" />Use
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => openEdit(clause)} title="Edit clause">
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
                     <Button
@@ -155,7 +164,7 @@ export default function Clauses() {
       <Dialog open={dialog} onOpenChange={setDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Clause' : 'New Clause'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit Clause' : form.title.startsWith('Copy of') ? 'Use Clause' : 'New Clause'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">

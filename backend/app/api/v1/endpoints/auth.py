@@ -16,6 +16,7 @@ from app.schemas.user import (
     ForgotPasswordRequest, ResetPasswordRequest,
 )
 from app.services.email_service import send_password_reset_email
+from app.services.seed_service import seed_sample_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,6 +49,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    seed_sample_data(db, user.id)
     token = create_access_token({"sub": str(user.id)})
     return Token(access_token=token, token_type="bearer", user=UserOut.model_validate(user))
 
