@@ -10,6 +10,7 @@ import Contracts from '@/pages/Contracts'
 import ContractDetail from '@/pages/ContractDetail'
 import NewContract from '@/pages/NewContract'
 import Templates from '@/pages/Templates'
+import Clauses from '@/pages/Clauses'
 import SignPage from '@/pages/SignPage'
 
 function ProtectedRoute({ children }) {
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/contracts/new" element={<ProtectedRoute><NewContract /></ProtectedRoute>} />
           <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetail /></ProtectedRoute>} />
           <Route path="/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
+          <Route path="/clauses" element={<ProtectedRoute><Clauses /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

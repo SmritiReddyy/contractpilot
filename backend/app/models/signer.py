@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Text
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Text, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -24,6 +24,9 @@ class Signer(Base):
     declined_at = Column(DateTime, nullable=True)
     decline_reason = Column(Text, nullable=True)
 
+    # Revocation
+    revoked_at = Column(DateTime, nullable=True)
+
     # Link lifecycle
     token = Column(String, unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     token_expires_at = Column(DateTime, nullable=True)
@@ -38,6 +41,8 @@ class Signer(Base):
 
     # Extra metadata (browser, locale, screen size, etc.)
     signing_metadata = Column(JSONB, nullable=True)
+
+    signing_order = Column(Integer, nullable=False, default=1)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

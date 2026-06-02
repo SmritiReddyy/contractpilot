@@ -26,6 +26,42 @@ CONTRACT TEXT:
 """
 
 
+SUMMARY_PROMPT = """Extract the following from this contract and return as JSON:
+{
+  "parties": ["list of party names"],
+  "contract_value": "monetary value or null",
+  "governing_law": "jurisdiction or null",
+  "key_dates": [{"label": "...", "date": "..."}],
+  "payment_terms": "summary or null",
+  "termination_clause": "summary or null",
+  "summary": "2-3 sentence plain English summary of what this contract is about"
+}
+
+CONTRACT TEXT:
+"""
+
+
+def summarize_contract(content: str) -> dict:
+    message = client.messages.create(
+        model="claude-opus-4-8",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": SUMMARY_PROMPT + content
+            }
+        ]
+    )
+
+    response_text = message.content[0].text
+    start = response_text.find("{")
+    end = response_text.rfind("}") + 1
+    if start == -1 or end == 0:
+        return {"parties": [], "contract_value": None, "governing_law": None, "key_dates": [], "payment_terms": None, "termination_clause": None, "summary": "Unable to parse summary."}
+
+    return json.loads(response_text[start:end])
+
+
 def analyze_contract_risk(content: str) -> dict:
     message = client.messages.create(
         model="claude-opus-4-8",

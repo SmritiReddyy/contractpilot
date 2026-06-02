@@ -12,6 +12,7 @@ class ContractCreate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     reminder_date: Optional[date] = None
+    signing_mode: str = "parallel"
 
 
 class ContractUpdate(BaseModel):
@@ -50,9 +51,11 @@ class SignerOut(BaseModel):
     id: uuid.UUID
     email: str
     name: Optional[str]
+    signing_order: int = 1
     signed_at: Optional[datetime]
     declined_at: Optional[datetime]
     decline_reason: Optional[str]
+    revoked_at: Optional[datetime]
     ip_address: Optional[str]
     user_agent: Optional[str]
     content_hash: Optional[str]
@@ -74,6 +77,7 @@ class ContractOut(BaseModel):
     content: str
     template_id: Optional[uuid.UUID]
     owner_id: uuid.UUID
+    signing_mode: str = "parallel"
     start_date: Optional[date]
     end_date: Optional[date]
     reminder_date: Optional[date]
@@ -104,6 +108,8 @@ class ContractSummary(BaseModel):
 class SignerCreate(BaseModel):
     email: str
     name: Optional[str] = None
+    signing_order: int = 1
+    signing_mode: str = "parallel"
 
 
 class OTPRequest(BaseModel):

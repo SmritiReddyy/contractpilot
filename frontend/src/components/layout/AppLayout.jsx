@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, FileText, FileStack, LogOut, Menu, X, Moon, Sun, ChevronRight
+  LayoutDashboard, FileText, FileStack, LogOut, Menu, X, Moon, Sun, ChevronRight, BookOpen
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -11,6 +11,7 @@ const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Contracts', href: '/contracts', icon: FileText },
   { label: 'Templates', href: '/templates', icon: FileStack },
+  { label: 'Clauses', href: '/clauses', icon: BookOpen },
 ]
 
 export default function AppLayout({ children }) {

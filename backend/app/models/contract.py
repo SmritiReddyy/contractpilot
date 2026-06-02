@@ -27,6 +27,7 @@ class Contract(Base):
     end_date = Column(Date, nullable=True)
     reminder_date = Column(Date, nullable=True)
     # Hash of content when first signer was added — used for tamper detection
+    signing_mode = Column(String, default="parallel")
     locked_content_hash = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -35,3 +36,4 @@ class Contract(Base):
     template = relationship("Template", back_populates="contracts")
     versions = relationship("ContractVersion", back_populates="contract", cascade="all, delete-orphan", order_by="ContractVersion.version_number")
     signers = relationship("Signer", back_populates="contract", cascade="all, delete-orphan")
+    milestones = relationship("Milestone", back_populates="contract", cascade="all, delete-orphan")

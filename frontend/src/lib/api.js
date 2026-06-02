@@ -41,9 +41,15 @@ export const contractsApi = {
   delete: (id) => api.delete(`/contracts/${id}`),
   dashboard: () => api.get('/contracts/dashboard'),
   addSigner: (id, data) => api.post(`/contracts/${id}/signers`, data),
+  revokeSigner: (id, signerId) => api.delete(`/contracts/${id}/signers/${signerId}`),
   restoreVersion: (contractId, versionId) => api.post(`/contracts/${contractId}/versions/${versionId}/restore`),
   analyze: (id) => api.post(`/contracts/${id}/analyze`),
+  summarize: (id) => api.post(`/contracts/${id}/summarize`),
   auditTrail: (id) => api.get(`/contracts/${id}/audit`),
+  getMilestones: (id) => api.get(`/contracts/${id}/milestones`),
+  createMilestone: (id, data) => api.post(`/contracts/${id}/milestones`, data),
+  updateMilestone: (id, milestoneId, data) => api.patch(`/contracts/${id}/milestones/${milestoneId}`, data),
+  deleteMilestone: (id, milestoneId) => api.delete(`/contracts/${id}/milestones/${milestoneId}`),
 }
 
 // Public signing (no auth needed)
@@ -63,6 +69,14 @@ export const templatesApi = {
   get: (id) => api.get(`/templates/${id}`),
   update: (id, data) => api.put(`/templates/${id}`, data),
   delete: (id) => api.delete(`/templates/${id}`),
+}
+
+// Clauses
+export const clausesApi = {
+  list: () => api.get('/clauses/'),
+  create: (data) => api.post('/clauses/', data),
+  update: (id, data) => api.put(`/clauses/${id}`, data),
+  delete: (id) => api.delete(`/clauses/${id}`),
 }
 
 export default api

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { contractsApi } from '@/lib/api'
+import { contractsApi, clausesApi } from '@/lib/api'
 import { formatDate, formatDateTime, statusColor, riskColor, riskIcon } from '@/lib/utils'
 import { downloadContractPDF } from '@/lib/pdf'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import {
 import {
   ArrowLeft, Download, Send, Shield, History, Users, Edit3, Check, X,
   RotateCcw, Loader2, Copy, AlertTriangle, ShieldCheck, Clock, Eye,
-  CheckCircle2, XCircle, Mail, FileDigit
+  CheckCircle2, XCircle, Mail, FileDigit, Flag, BookOpen, Sparkles, Trash2, Plus
 } from 'lucide-react'
 
 const EVENT_META = {
@@ -38,15 +38,29 @@ export default function ContractDetail() {
   const [saving, setSaving] = useState(false)
 
   const [signerDialog, setSignerDialog] = useState(false)
-  const [signerForm, setSignerForm] = useState({ email: '', name: '' })
+  const [signerForm, setSignerForm] = useState({ email: '', name: '', signing_order: 1, signing_mode: 'parallel' })
   const [signerLoading, setSignerLoading] = useState(false)
   const [signingLink, setSigningLink] = useState(null)
+  const [revokingId, setRevokingId] = useState(null)
 
   const [riskReport, setRiskReport] = useState(null)
   const [analyzingRisk, setAnalyzingRisk] = useState(false)
+  const [aiSummary, setAiSummary] = useState(null)
+  const [summarizing, setSummarizing] = useState(false)
 
   const [audit, setAudit] = useState(null)
   const [auditLoading, setAuditLoading] = useState(false)
+
+  const [milestones, setMilestones] = useState([])
+  const [milestonesLoaded, setMilestonesLoaded] = useState(false)
+  const [milestoneForm, setMilestoneForm] = useState({ title: '', description: '', due_date: '' })
+  const [milestoneDialog, setMilestoneDialog] = useState(false)
+  const [savingMilestone, setSavingMilestone] = useState(false)
+  const [deletingMilestoneId, setDeletingMilestoneId] = useState(null)
+
+  const [clauseDialog, setClauseDialog] = useState(false)
+  const [clauseLibrary, setClauseLibrary] = useState([])
+  const [clauseFilter, setClauseFilter] = useState('')
 
   const load = () =>
     contractsApi.get(id).then(({ data }) => {
@@ -61,6 +75,69 @@ export default function ContractDetail() {
     if (audit) return
     setAuditLoading(true)
     contractsApi.auditTrail(id).then(({ data }) => setAudit(data)).finally(() => setAuditLoading(false))
+  }
+
+  const loadMilestones = () => {
+    if (milestonesLoaded) return
+    contractsApi.getMilestones(id).then(({ data }) => {
+      setMilestones(data)
+      setMilestonesLoaded(true)
+    })
+  }
+
+  const handleAddMilestone = async () => {
+    setSavingMilestone(true)
+    try {
+      await contractsApi.createMilestone(id, milestoneForm)
+      const { data } = await contractsApi.getMilestones(id)
+      setMilestones(data)
+      setMilestoneDialog(false)
+      setMilestoneForm({ title: '', description: '', due_date: '' })
+    } finally {
+      setSavingMilestone(false)
+    }
+  }
+
+  const handleMarkComplete = async (milestoneId) => {
+    await contractsApi.updateMilestone(id, milestoneId, { status: 'completed' })
+    const { data } = await contractsApi.getMilestones(id)
+    setMilestones(data)
+  }
+
+  const handleDeleteMilestone = async (milestoneId) => {
+    if (!confirm('Delete this milestone?')) return
+    setDeletingMilestoneId(milestoneId)
+    try {
+      await contractsApi.deleteMilestone(id, milestoneId)
+      setMilestones(ms => ms.filter(m => m.id !== milestoneId))
+    } finally {
+      setDeletingMilestoneId(null)
+    }
+  }
+
+  const handleSummarize = async () => {
+    setSummarizing(true)
+    try {
+      const { data } = await contractsApi.summarize(id)
+      setAiSummary(data)
+    } catch (e) {
+      alert('AI summarization failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setSummarizing(false)
+    }
+  }
+
+  const openClauseDialog = async () => {
+    if (clauseLibrary.length === 0) {
+      const { data } = await clausesApi.list()
+      setClauseLibrary(data)
+    }
+    setClauseDialog(true)
+  }
+
+  const insertClause = (clauseContent) => {
+    setEditContent(prev => prev ? prev + '\n\n' + clauseContent : clauseContent)
+    setClauseDialog(false)
   }
 
   const handleSave = async () => {
@@ -81,10 +158,21 @@ export default function ContractDetail() {
       const { data } = await contractsApi.addSigner(id, signerForm)
       setSigningLink(data)
       await load()
-      setSignerForm({ email: '', name: '' })
+      setSignerForm({ email: '', name: '', signing_order: 1, signing_mode: 'parallel' })
       setAudit(null)
     } finally {
       setSignerLoading(false)
+    }
+  }
+
+  const handleRevokeSigner = async (signerId) => {
+    if (!confirm('Revoke this signing link? The signer will no longer be able to sign using their link.')) return
+    setRevokingId(signerId)
+    try {
+      await contractsApi.revokeSigner(id, signerId)
+      await load()
+    } finally {
+      setRevokingId(null)
     }
   }
 
@@ -147,6 +235,9 @@ export default function ContractDetail() {
         <div className="flex items-center gap-2 shrink-0">
           {editing ? (
             <>
+              <Button size="sm" variant="outline" onClick={openClauseDialog}>
+                <BookOpen className="w-4 h-4 mr-1" />Insert Clause
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={saving}>
                 <X className="w-4 h-4 mr-1" />Cancel
               </Button>
@@ -189,6 +280,9 @@ export default function ContractDetail() {
           <TabsTrigger value="content">Contract</TabsTrigger>
           <TabsTrigger value="signers">
             Signers {contract.signers?.length > 0 && `(${contract.signers.length})`}
+          </TabsTrigger>
+          <TabsTrigger value="milestones" onClick={loadMilestones}>
+            Milestones {milestones.length > 0 && `(${milestones.length})`}
           </TabsTrigger>
           <TabsTrigger value="versions">
             History {contract.versions?.length > 0 && `(${contract.versions.length})`}
@@ -252,7 +346,12 @@ export default function ContractDetail() {
                     <div key={signer.id} className="py-4 space-y-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="font-medium text-sm">{signer.name || signer.email}</p>
+                          <div className="flex items-center gap-2">
+                            {contract.signing_mode === 'sequential' && (
+                              <span className="text-xs font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{signer.signing_order}</span>
+                            )}
+                            <p className="font-medium text-sm">{signer.name || signer.email}</p>
+                          </div>
                           {signer.name && <p className="text-xs text-muted-foreground">{signer.email}</p>}
                         </div>
                         <SignerStatusBadge signer={signer} />
@@ -280,7 +379,10 @@ export default function ContractDetail() {
                           Declined {formatDateTime(signer.declined_at)}{signer.decline_reason ? ` — "${signer.decline_reason}"` : ''}
                         </p>
                       )}
-                      {!signer.signed_at && !signer.declined_at && (
+                      {signer.revoked_at && (
+                        <p className="text-xs text-red-500">Revoked {formatDateTime(signer.revoked_at)}</p>
+                      )}
+                      {!signer.signed_at && !signer.declined_at && !signer.revoked_at && (
                         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                           {signer.viewed_at && <span className="flex items-center gap-1"><Eye className="w-3 h-3" />Opened {formatDateTime(signer.viewed_at)}</span>}
                           {signer.otp_verified && <span className="flex items-center gap-1 text-green-600 dark:text-green-400"><ShieldCheck className="w-3 h-3" />Email verified</span>}
@@ -291,6 +393,18 @@ export default function ContractDetail() {
                           }}>
                             <Copy className="w-3 h-3 mr-1" />Copy link
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                            disabled={revokingId === signer.id}
+                            onClick={() => handleRevokeSigner(signer.id)}
+                          >
+                            {revokingId === signer.id
+                              ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                              : <X className="w-3 h-3 mr-1" />}
+                            Revoke
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -299,6 +413,118 @@ export default function ContractDetail() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Milestones ── */}
+        <TabsContent value="milestones" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Milestones & Obligations</CardTitle>
+                <CardDescription>Track key dates and deliverables for this contract</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => setMilestoneDialog(true)}>
+                <Plus className="w-4 h-4 mr-1" />Add Milestone
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {milestones.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Flag className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No milestones yet.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {milestones.map(m => {
+                    const isPast = new Date(m.due_date) < new Date() && m.status === 'pending'
+                    const displayStatus = isPast ? 'overdue' : m.status
+                    const statusStyles = {
+                      pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+                      completed: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                      overdue: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+                    }
+                    return (
+                      <div key={m.id} className="py-4 flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-sm">{m.title}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyles[displayStatus]}`}>
+                              {displayStatus}
+                            </span>
+                          </div>
+                          {m.description && <p className="text-xs text-muted-foreground">{m.description}</p>}
+                          <p className="text-xs text-muted-foreground">Due: {m.due_date}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {m.status !== 'completed' && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleMarkComplete(m.id)}>
+                              <Check className="w-3 h-3 mr-1" />Done
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            disabled={deletingMilestoneId === m.id}
+                            onClick={() => handleDeleteMilestone(m.id)}
+                          >
+                            {deletingMilestoneId === m.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Dialog open={milestoneDialog} onOpenChange={setMilestoneDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Milestone</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Title *</Label>
+                  <Input
+                    placeholder="e.g. Payment due, Delivery deadline"
+                    value={milestoneForm.title}
+                    onChange={e => setMilestoneForm({ ...milestoneForm, title: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    placeholder="Optional details..."
+                    value={milestoneForm.description}
+                    onChange={e => setMilestoneForm({ ...milestoneForm, description: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Due Date *</Label>
+                  <Input
+                    type="date"
+                    value={milestoneForm.due_date}
+                    onChange={e => setMilestoneForm({ ...milestoneForm, due_date: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setMilestoneDialog(false)}>Cancel</Button>
+                <Button
+                  onClick={handleAddMilestone}
+                  disabled={!milestoneForm.title || !milestoneForm.due_date || savingMilestone}
+                >
+                  {savingMilestone ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Add Milestone
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ── Version History ── */}
@@ -418,7 +644,92 @@ export default function ContractDetail() {
         </TabsContent>
 
         {/* ── AI Risk Analysis ── */}
-        <TabsContent value="risk" className="mt-4">
+        <TabsContent value="risk" className="mt-4 space-y-4">
+          {/* AI Summary section */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base">AI Summary</CardTitle>
+                <CardDescription>Extract structured metadata from this contract</CardDescription>
+              </div>
+              <Button onClick={handleSummarize} disabled={summarizing} variant="outline">
+                {summarizing
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Summarizing...</>
+                  : <><Sparkles className="w-4 h-4 mr-2" />Summarize</>
+                }
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!aiSummary ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Sparkles className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Click "Summarize" to extract key details</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {aiSummary.summary && (
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <p className="text-sm font-medium mb-1">Overview</p>
+                      <p className="text-sm text-muted-foreground">{aiSummary.summary}</p>
+                    </div>
+                  )}
+                  {aiSummary.parties?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Parties</p>
+                      <div className="flex flex-wrap gap-2">
+                        {aiSummary.parties.map((p, i) => (
+                          <span key={i} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">{p}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                    {aiSummary.contract_value && (
+                      <div className="p-3 rounded-md bg-muted/40">
+                        <p className="text-xs text-muted-foreground mb-1">Contract Value</p>
+                        <p className="font-medium">{aiSummary.contract_value}</p>
+                      </div>
+                    )}
+                    {aiSummary.governing_law && (
+                      <div className="p-3 rounded-md bg-muted/40">
+                        <p className="text-xs text-muted-foreground mb-1">Governing Law</p>
+                        <p className="font-medium">{aiSummary.governing_law}</p>
+                      </div>
+                    )}
+                    {aiSummary.payment_terms && (
+                      <div className="p-3 rounded-md bg-muted/40">
+                        <p className="text-xs text-muted-foreground mb-1">Payment Terms</p>
+                        <p className="font-medium">{aiSummary.payment_terms}</p>
+                      </div>
+                    )}
+                  </div>
+                  {aiSummary.key_dates?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Key Dates</p>
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-border">
+                          {aiSummary.key_dates.map((kd, i) => (
+                            <tr key={i}>
+                              <td className="py-1.5 text-muted-foreground pr-4">{kd.label}</td>
+                              <td className="py-1.5 font-medium">{kd.date}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {aiSummary.termination_clause && (
+                    <div className="p-3 rounded-md bg-muted/40">
+                      <p className="text-xs text-muted-foreground mb-1">Termination</p>
+                      <p className="text-sm">{aiSummary.termination_clause}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Risk analysis section */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -428,7 +739,7 @@ export default function ContractDetail() {
               <Button onClick={handleAnalyze} disabled={analyzingRisk}>
                 {analyzingRisk
                   ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyzing...</>
-                  : <><Shield className="w-4 h-4 mr-2" />Analyze Contract</>
+                  : <><Shield className="w-4 h-4 mr-2" />Analyze Risk</>
                 }
               </Button>
             </CardHeader>
@@ -436,7 +747,7 @@ export default function ContractDetail() {
               {!riskReport ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Shield className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p className="text-sm">Click "Analyze Contract" to get an AI risk assessment</p>
+                  <p className="text-sm">Click "Analyze Risk" to get an AI risk assessment</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -461,6 +772,46 @@ export default function ContractDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Insert Clause Dialog */}
+      <Dialog open={clauseDialog} onOpenChange={setClauseDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Insert Clause</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input
+              placeholder="Search clauses..."
+              value={clauseFilter}
+              onChange={e => setClauseFilter(e.target.value)}
+            />
+            <div className="max-h-80 overflow-y-auto space-y-2">
+              {clauseLibrary
+                .filter(c =>
+                  !clauseFilter ||
+                  c.title.toLowerCase().includes(clauseFilter.toLowerCase()) ||
+                  (c.category || '').toLowerCase().includes(clauseFilter.toLowerCase())
+                )
+                .map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => insertClause(c.content)}
+                    className="w-full text-left p-3 rounded-md border hover:border-primary hover:bg-primary/5 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{c.title}</p>
+                      {c.category && <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{c.category}</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.content}</p>
+                  </button>
+                ))}
+              {clauseLibrary.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-8">No clauses saved yet. Visit the Clause Library to add some.</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Signer Dialog */}
       <Dialog open={signerDialog} onOpenChange={setSignerDialog}>
@@ -496,6 +847,39 @@ export default function ContractDetail() {
                   <Label>Email *</Label>
                   <Input type="email" placeholder="signer@example.com" value={signerForm.email} onChange={(e) => setSignerForm({ ...signerForm, email: e.target.value })} required />
                 </div>
+                {contract.signers?.length === 0 && (
+                  <div className="space-y-2">
+                    <Label>Signing Mode</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'parallel', label: 'Parallel', desc: 'All signers receive links simultaneously' },
+                        { value: 'sequential', label: 'Sequential', desc: 'Each signer signs in order' },
+                      ].map(({ value, label, desc }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setSignerForm({ ...signerForm, signing_mode: value })}
+                          className={`text-left p-3 rounded-md border text-sm transition-colors ${signerForm.signing_mode === value ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground'}`}
+                        >
+                          <p className="font-medium">{label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(signerForm.signing_mode === 'sequential' || contract.signers?.length > 0) && (
+                  <div className="space-y-2">
+                    <Label>Signing Order</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={signerForm.signing_order}
+                      onChange={(e) => setSignerForm({ ...signerForm, signing_order: parseInt(e.target.value) || 1 })}
+                    />
+                    <p className="text-xs text-muted-foreground">Position in the signing queue (1 = first)</p>
+                  </div>
+                )}
                 <div className="p-3 bg-muted/50 rounded-md text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground">Security features:</p>
                   <p>• Unique one-time link, expires in 30 days</p>
@@ -523,6 +907,11 @@ function SignerStatusBadge({ signer }) {
   if (signer.signed_at) return (
     <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 flex items-center gap-1">
       <CheckCircle2 className="w-3 h-3" />Signed
+    </span>
+  )
+  if (signer.revoked_at) return (
+    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 flex items-center gap-1">
+      <X className="w-3 h-3" />Revoked
     </span>
   )
   if (signer.declined_at) return (

@@ -5,7 +5,7 @@ import { formatDate, statusColor } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileText, CheckCircle2, Clock, AlertTriangle, Plus, ArrowRight } from 'lucide-react'
+import { FileText, CheckCircle2, Clock, AlertTriangle, Plus, ArrowRight, Users, TrendingUp, Flag } from 'lucide-react'
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
@@ -26,7 +26,19 @@ export default function Dashboard() {
     { label: 'Active (Sent)', value: stats?.active ?? 0, icon: Clock, color: 'text-blue-500' },
     { label: 'Signed', value: stats?.signed ?? 0, icon: CheckCircle2, color: 'text-green-500' },
     { label: 'Expiring Soon', value: stats?.expiring_soon ?? 0, icon: AlertTriangle, color: 'text-amber-500' },
+    { label: 'Pending Signatures', value: stats?.pending_signers ?? 0, icon: Users, color: 'text-indigo-500' },
+    { label: 'Avg. Days to Sign', value: stats?.avg_days_to_sign != null ? `${stats.avg_days_to_sign}d` : '—', icon: TrendingUp, color: 'text-purple-500' },
+    { label: 'Overdue Milestones', value: stats?.overdue_milestones ?? 0, icon: Flag, color: 'text-red-500' },
   ]
+
+  const byStatus = stats?.by_status || {}
+  const statusMax = Math.max(...Object.values(byStatus), 1)
+  const statusColors = {
+    draft: 'bg-gray-400',
+    sent: 'bg-blue-400',
+    signed: 'bg-green-500',
+    expired: 'bg-red-400',
+  }
 
   return (
     <div className="space-y-6">
@@ -53,6 +65,27 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Signing pipeline chart */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Contract Pipeline</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Object.entries(byStatus).map(([status, count]) => (
+            <div key={status} className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground capitalize w-16 shrink-0">{status}</span>
+              <div className="flex-1 bg-muted rounded-full h-4 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${statusColors[status] || 'bg-primary'}`}
+                  style={{ width: `${Math.max((count / statusMax) * 100, count > 0 ? 4 : 0)}%` }}
+                />
+              </div>
+              <span className="text-sm font-medium w-6 text-right">{count}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">

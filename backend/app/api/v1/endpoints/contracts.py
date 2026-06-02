@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
+from datetime import date as date_type
 from datetime import datetime
 import uuid
 
@@ -12,6 +13,7 @@ from app.models.contract import Contract, ContractStatus
 from app.models.contract_version import ContractVersion
 from app.models.signer import Signer
 from app.models.signature_event import SignatureEvent
+from app.models.milestone import Milestone
 from app.schemas.contract import (
     ContractCreate, ContractUpdate, ContractOut, ContractSummary,
     SignerCreate, OTPVerify, SigningRequest, DeclineRequest,
@@ -67,6 +69,8 @@ def _get_signer_or_404(token: str, db: Session) -> Signer:
         raise HTTPException(status_code=404, detail="Invalid signing link")
     if is_expired(signer.token_expires_at):
         raise HTTPException(status_code=410, detail="This signing link has expired")
+    if signer.revoked_at:
+        raise HTTPException(status_code=410, detail="This signing link has been revoked")
     if signer.declined_at:
         raise HTTPException(status_code=409, detail="This contract was already declined")
     return signer
@@ -79,6 +83,7 @@ def _get_signer_or_404(token: str, db: Session) -> Signer:
 @router.get("/dashboard", response_model=dict)
 def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from datetime import date, timedelta
+    from sqlalchemy import func
     today = date.today()
     soon = today + timedelta(days=30)
 
@@ -86,6 +91,7 @@ def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(
     active   = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.sent).count()
     signed   = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.signed).count()
     expired  = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.expired).count()
+    draft    = db.query(Contract).filter(Contract.owner_id == current_user.id, Contract.status == ContractStatus.draft).count()
     expiring = (
         db.query(Contract)
         .filter(
@@ -101,9 +107,53 @@ def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(
         .order_by(Contract.updated_at.desc())
         .limit(5).all()
     )
+
+    owner_contract_ids = [c.id for c in db.query(Contract.id).filter(Contract.owner_id == current_user.id).all()]
+
+    pending_signers = 0
+    if owner_contract_ids:
+        pending_signers = db.query(Signer).filter(
+            Signer.contract_id.in_(owner_contract_ids),
+            Signer.signed_at == None,
+            Signer.revoked_at == None,
+            Signer.declined_at == None,
+        ).count()
+
+    signed_contracts = db.query(Contract).filter(
+        Contract.owner_id == current_user.id,
+        Contract.status == ContractStatus.signed,
+    ).all()
+
+    avg_days_to_sign = None
+    if signed_contracts:
+        days_list = []
+        for c in signed_contracts:
+            last_signer = db.query(Signer).filter(
+                Signer.contract_id == c.id,
+                Signer.signed_at != None,
+            ).order_by(Signer.signed_at.desc()).first()
+            if last_signer and last_signer.signed_at:
+                delta = (last_signer.signed_at - c.created_at).days
+                days_list.append(delta)
+        if days_list:
+            avg_days_to_sign = round(sum(days_list) / len(days_list), 1)
+
+    overdue_milestones = 0
+    if owner_contract_ids:
+        overdue_milestones = db.query(Milestone).filter(
+            Milestone.contract_id.in_(owner_contract_ids),
+            Milestone.due_date < today,
+            Milestone.status != "completed",
+        ).count()
+
     return {
         "total": total, "active": active, "signed": signed,
         "expired": expired, "expiring_soon": expiring,
+        "draft": draft,
+        "by_status": {"draft": draft, "sent": active, "signed": signed, "expired": expired},
+        "pending_signers": pending_signers,
+        "avg_days_to_sign": avg_days_to_sign,
+        "overdue_milestones": overdue_milestones,
         "recent": [ContractSummary.model_validate(c) for c in recent],
     }
 
@@ -211,6 +261,10 @@ async def add_signer(
     if not contract.locked_content_hash:
         contract.locked_content_hash = hash_content(contract.content)
 
+    existing_signers = db.query(Signer).filter(Signer.contract_id == contract_id).count()
+    if existing_signers == 0:
+        contract.signing_mode = body.signing_mode
+
     token = str(uuid.uuid4())
     signer = Signer(
         contract_id=contract_id,
@@ -218,6 +272,7 @@ async def add_signer(
         name=body.name,
         token=token,
         token_expires_at=token_expiry(),
+        signing_order=body.signing_order,
     )
     db.add(signer)
 
@@ -228,7 +283,19 @@ async def add_signer(
     db.refresh(signer)
 
     signing_url = f"{settings.FRONTEND_URL}/sign/{token}"
-    background_tasks.add_task(send_signing_invite, body.email, body.name or body.email, contract.title, signing_url)
+
+    should_send = True
+    if contract.signing_mode == "sequential" and body.signing_order > 1:
+        lower_order_signers = db.query(Signer).filter(
+            Signer.contract_id == contract_id,
+            Signer.signing_order < body.signing_order,
+            Signer.revoked_at == None,
+        ).all()
+        all_lower_signed = all(s.signed_at is not None for s in lower_order_signers)
+        should_send = all_lower_signed
+
+    if should_send:
+        background_tasks.add_task(send_signing_invite, body.email, body.name or body.email, contract.title, signing_url)
 
     return {
         "signer_id": str(signer.id),
@@ -236,6 +303,30 @@ async def add_signer(
         "signing_url": signing_url,
         "expires_at": signer.token_expires_at.isoformat(),
     }
+
+
+@router.delete("/{contract_id}/signers/{signer_id}", response_model=dict)
+def revoke_signer(
+    contract_id: str,
+    signer_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    signer = db.query(Signer).filter(Signer.id == signer_id, Signer.contract_id == contract_id).first()
+    if not signer:
+        raise HTTPException(status_code=404, detail="Signer not found")
+    if signer.signed_at:
+        raise HTTPException(status_code=409, detail="Cannot revoke — signer has already signed")
+    if signer.revoked_at:
+        raise HTTPException(status_code=409, detail="Signing link already revoked")
+
+    signer.revoked_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Signing link revoked successfully"}
 
 
 @router.get("/{contract_id}/audit", response_model=dict)
@@ -409,6 +500,17 @@ async def submit_signature(
         signer.signed_at.isoformat(), signer.content_hash,
     )
 
+    if contract.signing_mode == "sequential":
+        next_signers = db.query(Signer).filter(
+            Signer.contract_id == contract.id,
+            Signer.signing_order == signer.signing_order + 1,
+            Signer.signed_at == None,
+            Signer.revoked_at == None,
+        ).all()
+        for ns in next_signers:
+            ns_url = f"{settings.FRONTEND_URL}/sign/{ns.token}"
+            background_tasks.add_task(send_signing_invite, ns.email, ns.name or ns.email, contract.title, ns_url)
+
     return {
         "message": "Contract signed successfully",
         "signed_at": signer.signed_at.isoformat(),
@@ -453,3 +555,130 @@ def analyze_contract(contract_id: str, db: Session = Depends(get_db), current_us
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     return analyze_contract_risk(contract.content)
+
+
+# ─────────────────────────────────────────────
+# AI Summary
+# ─────────────────────────────────────────────
+
+@router.post("/{contract_id}/summarize", response_model=dict)
+def summarize_contract_endpoint(contract_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.ai_service import summarize_contract
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return summarize_contract(contract.content)
+
+
+# ─────────────────────────────────────────────
+# Milestones
+# ─────────────────────────────────────────────
+
+from pydantic import BaseModel as PydanticBaseModel
+
+class MilestoneCreate(PydanticBaseModel):
+    title: str
+    description: Optional[str] = None
+    due_date: date_type
+    status: str = "pending"
+
+class MilestoneUpdate(PydanticBaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    due_date: Optional[date_type] = None
+    status: Optional[str] = None
+
+
+@router.post("/{contract_id}/milestones", response_model=dict, status_code=status.HTTP_201_CREATED)
+def create_milestone(
+    contract_id: str,
+    body: MilestoneCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    milestone = Milestone(contract_id=contract_id, **body.model_dump())
+    db.add(milestone)
+    db.commit()
+    db.refresh(milestone)
+    return {
+        "id": str(milestone.id),
+        "contract_id": str(milestone.contract_id),
+        "title": milestone.title,
+        "description": milestone.description,
+        "due_date": milestone.due_date.isoformat(),
+        "status": milestone.status,
+        "created_at": milestone.created_at.isoformat(),
+    }
+
+
+@router.get("/{contract_id}/milestones", response_model=List[dict])
+def list_milestones(
+    contract_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    milestones = db.query(Milestone).filter(Milestone.contract_id == contract_id).order_by(Milestone.due_date).all()
+    return [
+        {
+            "id": str(m.id),
+            "contract_id": str(m.contract_id),
+            "title": m.title,
+            "description": m.description,
+            "due_date": m.due_date.isoformat(),
+            "status": m.status,
+            "created_at": m.created_at.isoformat(),
+        }
+        for m in milestones
+    ]
+
+
+@router.patch("/{contract_id}/milestones/{milestone_id}", response_model=dict)
+def update_milestone(
+    contract_id: str,
+    milestone_id: str,
+    body: MilestoneUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    milestone = db.query(Milestone).filter(Milestone.id == milestone_id, Milestone.contract_id == contract_id).first()
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    for field, value in body.model_dump(exclude_none=True).items():
+        setattr(milestone, field, value)
+    db.commit()
+    db.refresh(milestone)
+    return {
+        "id": str(milestone.id),
+        "contract_id": str(milestone.contract_id),
+        "title": milestone.title,
+        "description": milestone.description,
+        "due_date": milestone.due_date.isoformat(),
+        "status": milestone.status,
+        "created_at": milestone.created_at.isoformat(),
+    }
+
+
+@router.delete("/{contract_id}/milestones/{milestone_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_milestone(
+    contract_id: str,
+    milestone_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    milestone = db.query(Milestone).filter(Milestone.id == milestone_id, Milestone.contract_id == contract_id).first()
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    db.delete(milestone)
+    db.commit()
