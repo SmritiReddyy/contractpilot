@@ -1,28 +1,24 @@
 """
-Email delivery via Resend SDK (preferred) or SMTP fallback.
-
-Priority:
-  1. RESEND_API_KEY is set  → use Resend Python SDK
-  2. SMTP_USER is set       → use aiosmtplib over SMTP
-  3. Neither               → mock (print to console, dev only)
+Email delivery via SendGrid (preferred) or SMTP fallback.
 """
-import resend as resend_sdk
 from app.core.config import settings
 
 
-def _resend_send(to: str, subject: str, html_body: str):
-    """Send via Resend SDK (synchronous — Resend SDK is sync)."""
-    resend_sdk.api_key = settings.RESEND_API_KEY
-    resend_sdk.Emails.send({
-        "from": settings.EMAIL_FROM,
-        "to": [to],
-        "subject": subject,
-        "html": html_body,
-    })
+def _sendgrid_send(to: str, subject: str, html_body: str):
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+
+    message = Mail(
+        from_email=settings.EMAIL_FROM,
+        to_emails=to,
+        subject=subject,
+        html_content=html_body,
+    )
+    sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+    sg.send(message)
 
 
 async def _smtp_send(to: str, subject: str, html_body: str):
-    """Send via SMTP (aiosmtplib) — fallback when no Resend key."""
     import aiosmtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -33,22 +29,24 @@ async def _smtp_send(to: str, subject: str, html_body: str):
     msg["To"] = to
     msg.attach(MIMEText(html_body, "html"))
 
+    use_ssl = settings.SMTP_PORT == 465
+
     await aiosmtplib.send(
         msg,
         hostname=settings.SMTP_HOST,
         port=settings.SMTP_PORT,
         username=settings.SMTP_USER,
         password=settings.SMTP_PASSWORD,
-        start_tls=True,
+        use_tls=use_ssl,
+        start_tls=not use_ssl,
     )
 
 
 async def send_email(to: str, subject: str, html_body: str):
-    if settings.RESEND_API_KEY:
-        # Run sync Resend SDK in the async context
+    if settings.SENDGRID_API_KEY:
         import asyncio
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _resend_send, to, subject, html_body)
+        await loop.run_in_executor(None, _sendgrid_send, to, subject, html_body)
     elif settings.SMTP_USER:
         await _smtp_send(to, subject, html_body)
     else:
