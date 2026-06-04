@@ -75,6 +75,7 @@ class ContractOut(BaseModel):
     title: str
     status: ContractStatus
     content: str
+    is_sample: bool = False
     template_id: Optional[uuid.UUID]
     owner_id: uuid.UUID
     signing_mode: str = "parallel"
