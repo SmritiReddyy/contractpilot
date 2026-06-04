@@ -71,6 +71,8 @@ export default function Contracts() {
 
   const filtered = contracts.filter((c) => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase())
+    // Samples only show under 'all', never under a specific status filter
+    if (c.is_sample && statusFilter !== 'all') return false
     const matchStatus = statusFilter === 'all' || c.status === statusFilter
     return matchSearch && matchStatus
   })

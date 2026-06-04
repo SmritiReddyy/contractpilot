@@ -284,9 +284,11 @@ export default function ContractDetail() {
             </>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                <Edit3 className="w-4 h-4 mr-1" />Edit
-              </Button>
+              {!contract.is_sample && (
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                  <Edit3 className="w-4 h-4 mr-1" />Edit
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => downloadContractPDF(contract)}>
                 <Download className="w-4 h-4 mr-1" />PDF
               </Button>
@@ -340,7 +342,7 @@ export default function ContractDetail() {
         <TabsContent value="content" className="mt-4 space-y-4">
           <Card>
             <CardContent className="pt-6">
-              {editing ? (
+              {editing && !contract.is_sample ? (
                 <Textarea className="contract-editor" value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={24} />
               ) : (
                 <pre className="contract-content text-sm">{contract.content}</pre>
