@@ -53,6 +53,10 @@ export default function ContractDetail() {
   const [audit, setAudit] = useState(null)
   const [auditLoading, setAuditLoading] = useState(false)
 
+  const [useSampleDialog, setUseSampleDialog] = useState(false)
+  const [useSampleName, setUseSampleName] = useState('')
+  const [useSampleLoading, setUseSampleLoading] = useState(false)
+
   const [milestones, setMilestones] = useState([])
   const [milestonesLoaded, setMilestonesLoaded] = useState(false)
   const [milestoneForm, setMilestoneForm] = useState({ title: '', description: '', due_date: '' })
@@ -147,6 +151,19 @@ export default function ContractDetail() {
   const insertClause = (clauseContent) => {
     setEditContent(prev => prev ? prev + '\n\n' + clauseContent : clauseContent)
     setClauseDialog(false)
+  }
+
+  const handleUseSample = async () => {
+    if (!useSampleName.trim()) return
+    setUseSampleLoading(true)
+    try {
+      const { data: copy } = await contractsApi.duplicate(contract.id)
+      await contractsApi.update(copy.id, { title: useSampleName.trim() })
+      setUseSampleDialog(false)
+      navigate(`/contracts/${copy.id}`)
+    } finally {
+      setUseSampleLoading(false)
+    }
   }
 
   const handleSave = async () => {
@@ -284,18 +301,22 @@ export default function ContractDetail() {
             </>
           ) : (
             <>
-              {!contract.is_sample && (
-                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                  <Edit3 className="w-4 h-4 mr-1" />Edit
+              {contract.is_sample ? (
+                <Button size="sm" onClick={() => { setUseSampleName(''); setUseSampleDialog(true) }}>
+                  <Copy className="w-4 h-4 mr-1" />Use Sample
                 </Button>
-              )}
-              <Button size="sm" variant="outline" onClick={() => downloadContractPDF(contract)}>
-                <Download className="w-4 h-4 mr-1" />PDF
-              </Button>
-              {!contract.is_sample && (
-                <Button size="sm" onClick={() => setSignerDialog(true)}>
-                  <Send className="w-4 h-4 mr-1" />Send for Signing
-                </Button>
+              ) : (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                    <Edit3 className="w-4 h-4 mr-1" />Edit
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadContractPDF(contract)}>
+                    <Download className="w-4 h-4 mr-1" />PDF
+                  </Button>
+                  <Button size="sm" onClick={() => setSignerDialog(true)}>
+                    <Send className="w-4 h-4 mr-1" />Send for Signing
+                  </Button>
+                </>
               )}
             </>
           )}
@@ -920,6 +941,33 @@ export default function ContractDetail() {
             <Button onClick={handleOwnerSign} disabled={!ownerSignName.trim() || !ownerSignConsent || ownerSigning}>
               {ownerSigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
               Sign Contract
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Use Sample Dialog */}
+      <Dialog open={useSampleDialog} onOpenChange={setUseSampleDialog}>
+        <DialogContent className="w-full max-w-lg mx-4">
+          <DialogHeader>
+            <DialogTitle>Name your new contract</DialogTitle>
+            <DialogDescription>A copy of this sample will be saved as a draft with the name you choose.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>Contract name</Label>
+            <Input
+              value={useSampleName}
+              onChange={(e) => setUseSampleName(e.target.value)}
+              placeholder="e.g. NDA with Acme Corp"
+              onKeyDown={(e) => e.key === 'Enter' && handleUseSample()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setUseSampleDialog(false)}>Cancel</Button>
+            <Button onClick={handleUseSample} disabled={!useSampleName.trim() || useSampleLoading}>
+              {useSampleLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+              Create Draft
             </Button>
           </DialogFooter>
         </DialogContent>
