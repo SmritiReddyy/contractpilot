@@ -318,17 +318,21 @@ export default function ContractDetail() {
         <div className="overflow-x-auto -mx-1 px-1">
           <TabsList className="flex w-max min-w-full">
             <TabsTrigger value="content">Contract</TabsTrigger>
-            <TabsTrigger value="signers">
-              Signers {contract.signers?.length > 0 && `(${contract.signers.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="milestones" onClick={loadMilestones}>
-              Milestones {milestones.length > 0 && `(${milestones.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="versions">
-              History {contract.versions?.length > 0 && `(${contract.versions.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="audit" onClick={loadAudit}>Audit Trail</TabsTrigger>
-            <TabsTrigger value="risk">AI Risk</TabsTrigger>
+            {!contract.is_sample && (
+              <>
+                <TabsTrigger value="signers">
+                  Signers {contract.signers?.length > 0 && `(${contract.signers.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="milestones" onClick={loadMilestones}>
+                  Milestones {milestones.length > 0 && `(${milestones.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="versions">
+                  History {contract.versions?.length > 0 && `(${contract.versions.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="audit" onClick={loadAudit}>Audit Trail</TabsTrigger>
+                <TabsTrigger value="risk">AI Risk</TabsTrigger>
+              </>
+            )}
           </TabsList>
         </div>
 
