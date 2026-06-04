@@ -190,7 +190,7 @@ export default function NewContract() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-3 justify-end">
+          <div className="flex flex-col sm:flex-row gap-3 justify-end">
             {!templateIdParam && (
               <Button type="button" variant="outline" onClick={() => setStep(1)}>Back</Button>
             )}

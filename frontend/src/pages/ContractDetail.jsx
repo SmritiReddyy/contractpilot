@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/context/AuthContext'
 import { contractsApi, clausesApi } from '@/lib/api'
 import { formatDate, formatDateTime, statusColor, riskColor, riskIcon } from '@/lib/utils'
 import { downloadContractPDF } from '@/lib/pdf'
@@ -30,6 +31,7 @@ const EVENT_META = {
 export default function ContractDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [contract, setContract] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -61,6 +63,13 @@ export default function ContractDetail() {
   const [clauseDialog, setClauseDialog] = useState(false)
   const [clauseLibrary, setClauseLibrary] = useState([])
   const [clauseFilter, setClauseFilter] = useState('')
+
+  // Owner sign dialog
+  const [ownerSignDialog, setOwnerSignDialog] = useState(false)
+  const [ownerSignName, setOwnerSignName] = useState('')
+  const [ownerSignConsent, setOwnerSignConsent] = useState(false)
+  const [ownerSigning, setOwnerSigning] = useState(false)
+  const [ownerSignError, setOwnerSignError] = useState('')
 
   const load = () =>
     contractsApi.get(id).then(({ data }) => {
@@ -197,6 +206,29 @@ export default function ContractDetail() {
 
   const copyToClipboard = (text) => navigator.clipboard.writeText(text)
 
+  const openOwnerSignDialog = () => {
+    setOwnerSignName(user?.full_name || '')
+    setOwnerSignConsent(false)
+    setOwnerSignError('')
+    setOwnerSignDialog(true)
+  }
+
+  const handleOwnerSign = async () => {
+    if (!ownerSignName.trim()) { setOwnerSignError('Please enter your full name'); return }
+    if (!ownerSignConsent) { setOwnerSignError('You must consent to sign electronically'); return }
+    setOwnerSigning(true)
+    setOwnerSignError('')
+    try {
+      await contractsApi.ownerSign(id, { name: ownerSignName, consent: true })
+      setOwnerSignDialog(false)
+      await load()
+    } catch (e) {
+      setOwnerSignError(e.response?.data?.detail || 'Signing failed')
+    } finally {
+      setOwnerSigning(false)
+    }
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -211,18 +243,23 @@ export default function ContractDetail() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/contracts')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/contracts')} className="shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="min-w-0">
             {editing ? (
               <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-xl font-bold" />
             ) : (
-              <h1 className="text-2xl font-bold truncate">{contract.title}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold truncate">{contract.title}</h1>
             )}
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {contract.is_sample && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                  Sample
+                </span>
+              )}
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColor(contract.status)}`}>
                 {contract.status}
               </span>
@@ -232,7 +269,7 @@ export default function ContractDetail() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {editing ? (
             <>
               <Button size="sm" variant="outline" onClick={openClauseDialog}>
@@ -253,9 +290,11 @@ export default function ContractDetail() {
               <Button size="sm" variant="outline" onClick={() => downloadContractPDF(contract)}>
                 <Download className="w-4 h-4 mr-1" />PDF
               </Button>
-              <Button size="sm" onClick={() => setSignerDialog(true)}>
-                <Send className="w-4 h-4 mr-1" />Send for Signing
-              </Button>
+              {!contract.is_sample && (
+                <Button size="sm" onClick={() => setSignerDialog(true)}>
+                  <Send className="w-4 h-4 mr-1" />Send for Signing
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -276,20 +315,22 @@ export default function ContractDetail() {
       )}
 
       <Tabs defaultValue="content">
-        <TabsList>
-          <TabsTrigger value="content">Contract</TabsTrigger>
-          <TabsTrigger value="signers">
-            Signers {contract.signers?.length > 0 && `(${contract.signers.length})`}
-          </TabsTrigger>
-          <TabsTrigger value="milestones" onClick={loadMilestones}>
-            Milestones {milestones.length > 0 && `(${milestones.length})`}
-          </TabsTrigger>
-          <TabsTrigger value="versions">
-            History {contract.versions?.length > 0 && `(${contract.versions.length})`}
-          </TabsTrigger>
-          <TabsTrigger value="audit" onClick={loadAudit}>Audit Trail</TabsTrigger>
-          <TabsTrigger value="risk">AI Risk</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1">
+          <TabsList className="flex w-max min-w-full">
+            <TabsTrigger value="content">Contract</TabsTrigger>
+            <TabsTrigger value="signers">
+              Signers {contract.signers?.length > 0 && `(${contract.signers.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="milestones" onClick={loadMilestones}>
+              Milestones {milestones.length > 0 && `(${milestones.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="versions">
+              History {contract.versions?.length > 0 && `(${contract.versions.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="audit" onClick={loadAudit}>Audit Trail</TabsTrigger>
+            <TabsTrigger value="risk">AI Risk</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Contract content ── */}
         <TabsContent value="content" className="mt-4 space-y-4">
@@ -330,8 +371,26 @@ export default function ContractDetail() {
         <TabsContent value="signers" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Signers</CardTitle>
-              <CardDescription>Signing links expire after 30 days. Email is verified via OTP before signing.</CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Signers</CardTitle>
+                  <CardDescription>
+                    {contract.is_sample
+                      ? 'This is a sample contract — duplicate it to send for signing.'
+                      : 'Signing links expire after 30 days.'}
+                  </CardDescription>
+                </div>
+                {!contract.is_sample && (
+                  <div className="flex gap-2 shrink-0 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={openOwnerSignDialog}>
+                      <Check className="w-4 h-4 mr-1" />Add my signature
+                    </Button>
+                    <Button size="sm" onClick={() => setSignerDialog(true)}>
+                      <Send className="w-4 h-4 mr-1" />Add Signer
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {contract.signers?.length === 0 ? (
@@ -482,7 +541,7 @@ export default function ContractDetail() {
           </Card>
 
           <Dialog open={milestoneDialog} onOpenChange={setMilestoneDialog}>
-            <DialogContent>
+            <DialogContent className="w-full max-w-lg mx-4">
               <DialogHeader>
                 <DialogTitle>Add Milestone</DialogTitle>
               </DialogHeader>
@@ -775,7 +834,7 @@ export default function ContractDetail() {
 
       {/* Insert Clause Dialog */}
       <Dialog open={clauseDialog} onOpenChange={setClauseDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-lg mx-4">
           <DialogHeader>
             <DialogTitle>Insert Clause</DialogTitle>
           </DialogHeader>
@@ -813,9 +872,56 @@ export default function ContractDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Owner Sign Dialog */}
+      <Dialog open={ownerSignDialog} onOpenChange={setOwnerSignDialog}>
+        <DialogContent className="w-full max-w-lg mx-4">
+          <DialogHeader>
+            <DialogTitle>Add My Signature</DialogTitle>
+            <DialogDescription>Sign this contract as the owner. This will be recorded in the audit trail.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {ownerSignError && (
+              <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{ownerSignError}</div>
+            )}
+            <div className="space-y-2">
+              <Label>Full legal name *</Label>
+              <Input
+                value={ownerSignName}
+                onChange={(e) => setOwnerSignName(e.target.value)}
+                placeholder="Type your full name"
+              />
+            </div>
+            {ownerSignName && (
+              <div className="p-4 border-2 border-dashed rounded-md bg-muted/30">
+                <p className="text-xs text-muted-foreground mb-1">Signature preview</p>
+                <p className="text-2xl" style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>{ownerSignName}</p>
+              </div>
+            )}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={ownerSignConsent}
+                onChange={(e) => setOwnerSignConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-primary"
+              />
+              <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                I consent to sign <strong>{contract?.title}</strong> electronically. This constitutes a legally binding signature.
+              </span>
+            </label>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setOwnerSignDialog(false)}>Cancel</Button>
+            <Button onClick={handleOwnerSign} disabled={!ownerSignName.trim() || !ownerSignConsent || ownerSigning}>
+              {ownerSigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+              Sign Contract
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Signer Dialog */}
       <Dialog open={signerDialog} onOpenChange={setSignerDialog}>
-        <DialogContent>
+        <DialogContent className="w-full max-w-lg mx-4">
           <DialogHeader>
             <DialogTitle>Send for Signing</DialogTitle>
             <DialogDescription>

@@ -1,27 +1,19 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { signingApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
-import { FileText, CheckCircle2, Loader2, ShieldCheck, XCircle, AlertTriangle, RefreshCw } from 'lucide-react'
+import { FileText, CheckCircle2, Loader2, ShieldCheck, XCircle, AlertTriangle } from 'lucide-react'
 
-// Steps: 'loading' | 'review' | 'otp' | 'sign' | 'signed' | 'declined' | 'error'
+// Steps: 'loading' | 'review' | 'sign' | 'signed' | 'declined' | 'error'
 
 export default function SignPage() {
   const { token } = useParams()
   const [step, setStep] = useState('loading')
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
-
-  // OTP
-  const [otp, setOtp] = useState(['', '', '', '', '', ''])
-  const [otpSending, setOtpSending] = useState(false)
-  const [otpVerifying, setOtpVerifying] = useState(false)
-  const [otpError, setOtpError] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
-  const otpRefs = useRef([])
 
   // Signing
   const [name, setName] = useState('')
@@ -41,11 +33,7 @@ export default function SignPage() {
         setData(data)
         if (data.already_signed) { setStep('signed'); return }
         if (data.signer_name) setName(data.signer_name)
-        if (data.otp_verified) {
-          setStep('sign')
-        } else {
-          setStep('review')
-        }
+        setStep('review')
       })
       .catch(() => { setError('This signing link is invalid or has expired.'); setStep('error') })
   }, [token])
@@ -57,49 +45,6 @@ export default function SignPage() {
     language: navigator.language,
     platform: navigator.platform,
   })
-
-  const handleSendOtp = async () => {
-    setOtpSending(true)
-    setOtpError('')
-    try {
-      await signingApi.sendOtp(token)
-      setOtpSent(true)
-      setStep('otp')
-    } catch (e) {
-      setOtpError(e.response?.data?.detail || 'Failed to send code')
-    } finally {
-      setOtpSending(false)
-    }
-  }
-
-  const handleOtpInput = (i, value) => {
-    if (!/^\d?$/.test(value)) return
-    const next = [...otp]
-    next[i] = value
-    setOtp(next)
-    if (value && i < 5) otpRefs.current[i + 1]?.focus()
-  }
-
-  const handleOtpKeyDown = (i, e) => {
-    if (e.key === 'Backspace' && !otp[i] && i > 0) otpRefs.current[i - 1]?.focus()
-  }
-
-  const handleVerifyOtp = async () => {
-    const code = otp.join('')
-    if (code.length < 6) { setOtpError('Enter all 6 digits'); return }
-    setOtpVerifying(true)
-    setOtpError('')
-    try {
-      await signingApi.verifyOtp(token, code)
-      setStep('sign')
-    } catch (e) {
-      setOtpError(e.response?.data?.detail || 'Incorrect code')
-      setOtp(['', '', '', '', '', ''])
-      otpRefs.current[0]?.focus()
-    } finally {
-      setOtpVerifying(false)
-    }
-  }
 
   const handleSign = async () => {
     if (!name.trim()) { setSignError('Please enter your full name'); return }
@@ -198,11 +143,9 @@ export default function SignPage() {
 
         {/* Progress indicator */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <StepDot done active={step === 'review'} label="1. Review" />
+          <StepDot done={step === 'sign' || step === 'signed'} active={step === 'review'} label="1. Review" />
           <div className="flex-1 h-px bg-border" />
-          <StepDot done={step === 'sign' || step === 'signed'} active={step === 'otp'} label="2. Verify Email" />
-          <div className="flex-1 h-px bg-border" />
-          <StepDot done={step === 'signed'} active={step === 'sign'} label="3. Sign" />
+          <StepDot done={step === 'signed'} active={step === 'sign'} label="2. Sign" />
         </div>
 
         {/* Step 1: Review contract */}
@@ -219,19 +162,14 @@ export default function SignPage() {
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col gap-3">
-                {otpError && <p className="text-sm text-destructive w-full">{otpError}</p>}
                 <div className="flex gap-3 w-full">
                   <Button variant="outline" className="flex-1" onClick={() => setShowDeclineForm(true)}>
                     <XCircle className="w-4 h-4 mr-2" />Decline
                   </Button>
-                  <Button className="flex-1" onClick={handleSendOtp} disabled={otpSending}>
-                    {otpSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                    I've read this — verify my email
+                  <Button className="flex-1" onClick={() => setStep('sign')}>
+                    Proceed to Sign
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  A 6-digit code will be sent to <strong>{data?.signer_email}</strong>
-                </p>
               </CardFooter>
             </Card>
 
@@ -260,55 +198,7 @@ export default function SignPage() {
           </>
         )}
 
-        {/* Step 2: OTP verification */}
-        {step === 'otp' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Verify your email</CardTitle>
-              <CardDescription>
-                We sent a 6-digit code to <strong>{data?.signer_email}</strong>. Enter it below.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {otpError && (
-                <div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{otpError}</div>
-              )}
-              <div className="flex gap-2 justify-center">
-                {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (otpRefs.current[i] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpInput(i, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                    className="w-12 h-14 text-center text-xl font-bold border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                ))}
-              </div>
-              <p className="text-xs text-center text-muted-foreground">
-                Code expires in 15 minutes.{' '}
-                <button
-                  className="text-primary hover:underline inline-flex items-center gap-1"
-                  onClick={handleSendOtp}
-                  disabled={otpSending}
-                >
-                  <RefreshCw className="w-3 h-3" />Resend
-                </button>
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button className="w-full" onClick={handleVerifyOtp} disabled={otpVerifying || otp.join('').length < 6}>
-                {otpVerifying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                Verify Code
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* Step 3: Sign */}
+        {/* Step 2: Sign */}
         {step === 'sign' && (
           <>
             {/* Compact contract reminder */}
@@ -325,12 +215,7 @@ export default function SignPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">
-                  <span className="flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-green-500" />
-                    Email verified — sign below
-                  </span>
-                </CardTitle>
+                <CardTitle className="text-base">Sign below</CardTitle>
                 <CardDescription>
                   Your signature will be recorded with a timestamp, your IP address, and a hash of the document.
                 </CardDescription>
@@ -376,7 +261,6 @@ export default function SignPage() {
                   <p>• Your IP address and the exact timestamp of signing</p>
                   <p>• A SHA-256 hash of the document (proves what you signed)</p>
                   <p>• Browser metadata (timezone, platform)</p>
-                  <p>• Your email verification via OTP</p>
                 </div>
               </CardContent>
               <CardFooter className="flex gap-3">

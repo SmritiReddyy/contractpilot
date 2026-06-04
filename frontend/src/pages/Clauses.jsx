@@ -81,12 +81,12 @@ export default function Clauses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Clause Library</h1>
           <p className="text-muted-foreground text-sm mt-1">Save and reuse standard contract clauses</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="self-start sm:self-auto">
           <Plus className="w-4 h-4 mr-2" />New Clause
         </Button>
       </div>
@@ -132,7 +132,7 @@ export default function Clauses() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                     <Button size="sm" variant="outline" onClick={() => openUse(clause)} title="Use this clause as a starting point">
                       <Copy className="w-3.5 h-3.5 mr-1" />Use
                     </Button>
@@ -162,7 +162,7 @@ export default function Clauses() {
       )}
 
       <Dialog open={dialog} onOpenChange={setDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-lg mx-4">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Clause' : form.title.startsWith('Copy of') ? 'Use Clause' : 'New Clause'}</DialogTitle>
           </DialogHeader>

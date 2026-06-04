@@ -4,7 +4,9 @@ import { contractsApi } from '@/lib/api'
 import { formatDate, statusColor } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { Plus, Search, FileText, Trash2, Copy } from 'lucide-react'
 
 export default function Contracts() {
@@ -13,6 +15,12 @@ export default function Contracts() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+
+  // Sample "Use Sample" rename dialog state
+  const [renameDialog, setRenameDialog] = useState(false)
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameName, setRenameName] = useState('')
+  const [renameLoading, setRenameLoading] = useState(false)
 
   const load = () => {
     contractsApi.list().then(({ data }) => setContracts(data)).finally(() => setLoading(false))
@@ -35,6 +43,32 @@ export default function Contracts() {
     navigate(`/contracts/${data.id}`)
   }
 
+  const handleUseSample = async (e, contract) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setRenameLoading(true)
+    try {
+      const { data } = await contractsApi.duplicate(contract.id)
+      setRenamingId(data.id)
+      setRenameName(contract.title)
+      setRenameDialog(true)
+    } finally {
+      setRenameLoading(false)
+    }
+  }
+
+  const handleRenameConfirm = async () => {
+    if (!renameName.trim() || !renamingId) return
+    setRenameLoading(true)
+    try {
+      await contractsApi.update(renamingId, { title: renameName.trim() })
+      setRenameDialog(false)
+      navigate(`/contracts/${renamingId}`)
+    } finally {
+      setRenameLoading(false)
+    }
+  }
+
   const filtered = contracts.filter((c) => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || c.status === statusFilter
@@ -45,12 +79,12 @@ export default function Contracts() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Contracts</h1>
           <p className="text-muted-foreground text-sm mt-1">{contracts.length} contract{contracts.length !== 1 ? 's' : ''} total</p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start sm:self-auto">
           <Link to="/contracts/new"><Plus className="w-4 h-4 mr-2" />New Contract</Link>
         </Button>
       </div>
@@ -65,7 +99,7 @@ export default function Contracts() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {statuses.map((s) => (
             <button
               key={s}
@@ -103,8 +137,8 @@ export default function Contracts() {
             <Link key={contract.id} to={`/contracts/${contract.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
                         <FileText className="w-4 h-4 text-primary" />
                       </div>
@@ -117,30 +151,51 @@ export default function Contracts() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                       {contract.is_sample ? (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                          Sample
-                        </span>
+                        <>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 hidden sm:inline">
+                            Sample
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2"
+                            disabled={renameLoading}
+                            onClick={(e) => handleUseSample(e, contract)}
+                            title="Duplicate this sample to edit and send"
+                          >
+                            Use Sample
+                          </Button>
+                          <button
+                            onClick={(e) => handleDelete(e, contract.id)}
+                            title="Delete contract"
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
                       ) : (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${statusColor(contract.status)}`}>
-                          {contract.status}
-                        </span>
+                        <>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize hidden sm:inline ${statusColor(contract.status)}`}>
+                            {contract.status}
+                          </span>
+                          <button
+                            onClick={(e) => handleDuplicate(e, contract.id)}
+                            title="Duplicate contract"
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDelete(e, contract.id)}
+                            title="Delete contract"
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
-                      <button
-                        onClick={(e) => handleDuplicate(e, contract.id)}
-                        title="Duplicate contract"
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => handleDelete(e, contract.id)}
-                        title="Delete contract"
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
                 </CardContent>
@@ -149,6 +204,32 @@ export default function Contracts() {
           ))}
         </div>
       )}
+
+      {/* Rename dialog after duplicating sample */}
+      <Dialog open={renameDialog} onOpenChange={setRenameDialog}>
+        <DialogContent className="w-full max-w-lg mx-4">
+          <DialogHeader>
+            <DialogTitle>Name your contract</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>Contract name</Label>
+            <Input
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              placeholder="Enter a name for this contract"
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameConfirm()}
+            />
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => { setRenameDialog(false); navigate(`/contracts/${renamingId}`) }}>
+              Skip
+            </Button>
+            <Button onClick={handleRenameConfirm} disabled={!renameName.trim() || renameLoading}>
+              {renameLoading ? 'Saving...' : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

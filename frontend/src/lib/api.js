@@ -51,6 +51,7 @@ export const contractsApi = {
   createMilestone: (id, data) => api.post(`/contracts/${id}/milestones`, data),
   updateMilestone: (id, milestoneId, data) => api.patch(`/contracts/${id}/milestones/${milestoneId}`, data),
   deleteMilestone: (id, milestoneId) => api.delete(`/contracts/${id}/milestones/${milestoneId}`),
+  ownerSign: (id, data) => api.post(`/contracts/${id}/owner-sign`, data),
 }
 
 // Public signing (no auth needed)

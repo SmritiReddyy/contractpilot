@@ -21,7 +21,7 @@ from app.schemas.contract import (
 )
 from app.services.email_service import (
     send_signing_invite, send_otp_email,
-    send_signature_confirmation,
+    send_signature_confirmation, send_owner_signed_notification,
 )
 from app.services.ai_service import analyze_contract_risk
 from app.services.esign_service import (
@@ -353,6 +353,63 @@ def revoke_signer(
     return {"message": "Signing link revoked successfully"}
 
 
+@router.post("/{contract_id}/owner-sign", response_model=dict)
+async def owner_sign(
+    contract_id: str,
+    body: SigningRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.owner_id == current_user.id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if not body.consent:
+        raise HTTPException(status_code=400, detail="Consent is required to sign electronically")
+
+    ip = request.client.host
+    ua = request.headers.get("user-agent", "")
+    content_hash = hash_content(contract.content)
+    signed_at = datetime.utcnow()
+
+    # Create a Signer record for the owner
+    signer = Signer(
+        contract_id=contract_id,
+        email=current_user.email,
+        name=body.name or current_user.full_name,
+        token=str(uuid.uuid4()),
+        token_expires_at=token_expiry(),
+        signed_at=signed_at,
+        otp_verified=True,
+        ip_address=ip,
+        user_agent=ua,
+        content_hash=content_hash,
+        signing_metadata=body.metadata or {},
+    )
+    db.add(signer)
+    db.flush()
+
+    _record_event(db, signer.id, "signed", ip=ip, ua=ua, extra_meta={
+        "content_hash": content_hash,
+        "consent_given": True,
+        "owner_signed": True,
+    })
+
+    # Check if all signers have signed
+    all_signers = db.query(Signer).filter(Signer.contract_id == contract.id).all()
+    if all(s.signed_at or s.id == signer.id for s in all_signers):
+        contract.status = ContractStatus.signed
+
+    db.commit()
+
+    return {
+        "signed_at": signed_at.isoformat(),
+        "content_hash": content_hash,
+    }
+
+
 @router.get("/{contract_id}/audit", response_model=dict)
 def get_audit_trail(contract_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     contract = (
@@ -487,9 +544,6 @@ async def submit_signature(
     if signer.signed_at:
         raise HTTPException(status_code=409, detail="Already signed")
 
-    if not signer.otp_verified:
-        raise HTTPException(status_code=403, detail="Email not verified — complete OTP verification first")
-
     if not body.consent:
         raise HTTPException(status_code=400, detail="Consent is required to sign electronically")
 
@@ -523,6 +577,15 @@ async def submit_signature(
         signer.email, signer.name, contract.title,
         signer.signed_at.isoformat(), signer.content_hash,
     )
+
+    # Notify the contract owner that someone signed
+    owner = db.query(User).filter(User.id == contract.owner_id).first()
+    if owner:
+        background_tasks.add_task(
+            send_owner_signed_notification,
+            owner.email, owner.full_name or owner.email,
+            signer.name or signer.email, signer.email, contract.title,
+        )
 
     if contract.signing_mode == "sequential":
         next_signers = db.query(Signer).filter(

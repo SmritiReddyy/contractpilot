@@ -69,12 +69,12 @@ export default function Templates() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Templates</h1>
           <p className="text-muted-foreground text-sm mt-1">Reusable contract templates with variable fields</p>
         </div>
-        <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />New Template</Button>
+        <Button onClick={openNew} className="self-start sm:self-auto"><Plus className="w-4 h-4 mr-2" />New Template</Button>
       </div>
 
       {loading ? (
@@ -125,7 +125,7 @@ export default function Templates() {
       )}
 
       <Dialog open={dialog} onOpenChange={setDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Template' : 'New Template'}</DialogTitle>
             <DialogDescription>
@@ -161,7 +161,7 @@ export default function Templates() {
                 </Button>
               </div>
               {form.variables.map((v, i) => (
-                <div key={i} className="flex gap-2 items-center">
+                <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                   <Input
                     placeholder="Label (e.g. Client Name)"
                     value={v.label}

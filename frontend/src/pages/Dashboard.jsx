@@ -42,25 +42,25 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-1">Overview of your contract portfolio</p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start sm:self-auto">
           <Link to="/contracts/new"><Plus className="w-4 h-4 mr-2" />New Contract</Link>
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
         {cards.map(({ label, value, icon: Icon, color }) => (
           <Card key={label}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <Icon className={`w-5 h-5 ${color}`} />
+                <p className="text-xs sm:text-sm text-muted-foreground leading-tight">{label}</p>
+                <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${color} shrink-0`} />
               </div>
-              <p className="text-3xl font-bold">{value}</p>
+              <p className="text-2xl sm:text-3xl font-bold">{value}</p>
             </CardContent>
           </Card>
         ))}
@@ -109,15 +109,15 @@ export default function Dashboard() {
                 <Link
                   key={contract.id}
                   to={`/contracts/${contract.id}`}
-                  className="flex items-center justify-between py-3 hover:bg-accent/30 px-2 -mx-2 rounded transition-colors"
+                  className="flex items-center justify-between py-3 hover:bg-accent/30 px-2 -mx-2 rounded transition-colors gap-2"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{contract.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {contract.end_date ? `Expires ${formatDate(contract.end_date)}` : `Created ${formatDate(contract.created_at)}`}
                     </p>
                   </div>
-                  <span className={`ml-3 px-2 py-1 rounded-full text-xs font-medium capitalize shrink-0 ${statusColor(contract.status)}`}>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize shrink-0 ${statusColor(contract.status)}`}>
                     {contract.status}
                   </span>
                 </Link>

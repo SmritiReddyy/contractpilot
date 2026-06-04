@@ -164,6 +164,23 @@ async def send_signature_confirmation(signer_email: str, signer_name: str, contr
     await send_email(signer_email, f"Signed: '{contract_title}'", html)
 
 
+async def send_owner_signed_notification(owner_email: str, owner_name: str, signer_name: str, signer_email: str, contract_title: str):
+    html = f"""
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px">
+      <div style="margin-bottom:24px">
+        <span style="font-size:20px;font-weight:700;color:#111">ContractPilot</span>
+      </div>
+      <h2 style="color:#16a34a;margin-top:0">✓ Contract Signed</h2>
+      <p style="color:#374151">Hi {owner_name or owner_email},</p>
+      <p style="color:#374151">
+        <strong>{signer_name} ({signer_email})</strong> has signed <strong>'{contract_title}'</strong>.
+      </p>
+      <p style="color:#9ca3af;font-size:12px">Log in to ContractPilot to view the audit trail.</p>
+    </div>
+    """
+    await send_email(owner_email, f"Signed: '{contract_title}' — {signer_name} has signed", html)
+
+
 async def send_reminder_email(owner_email: str, contract_title: str, end_date: str):
     html = f"""
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px">
